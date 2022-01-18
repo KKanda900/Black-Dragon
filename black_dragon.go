@@ -2,8 +2,7 @@ package main
 
 /*
 	Things to Work On:
-		1. Encrypt and Decrypt Password/Key
-		2. How to make EXE out of this
+		1. How to make EXE out of this
  */
 
 /*
@@ -26,10 +25,15 @@ import (
   "github.com/shirou/gopsutil/mem"
   "github.com/shirou/gopsutil/host"
   "github.com/shirou/gopsutil/disk"
-  "math"
-  "math/rand"
-  "unsafe"
+  "crypto"
+  "crypto/rsa"
+  "crypto/rand"
+  "crypto/sha256"
 )
+
+// Create two global variables used for encrypt/decrypt
+var key *rsa.PrivateKey = nil
+var bytes []byte = nil
 
 /*
 	Takes the error and outputs the given error if there is any.
@@ -134,62 +138,6 @@ func checkIfReachable(website string) int {
 	return 0
 }
 
-func returnPrimeNumbers(num1, num2 int) []int{
-	
-	primes := []int{1}
-	
-	if num1<2 || num2<2{
-	   fmt.Println("Numbers must be greater than 2.")
-	   return primes
-	}
-	
-	for num1 <= num2 {
-	   isPrime := true
-	   for i:=2; i<=int(math.Sqrt(float64(num1))); i++{
-		  if num1 % i == 0{
-			 isPrime = false
-			 break
-		  }
-	   }
-	   if isPrime {
-		  primes = append(primes, num1)
-	   }
-	   num1++
-	
-	}
-	
-	return primes
-
- }
-
- func LCM(a, b int, integers ...int) int {
-	result := a * b / GCD(a, b)
-
-	for i := 0; i < len(integers); i++ {
-			result = LCM(result, integers[i])
-	}
-
-	return result
-}
-
-func GCD(a, b int) int {
-	for b != 0 {
-			t := b
-			b = a % b
-			a = t
-	}
-	return a
-}
-
-func ByteArrayToInt(arr []byte) int64{
-    val := int64(0)
-    size := len(arr)
-    for i := 0 ; i < size ; i++ {
-        *(*uint8)(unsafe.Pointer(uintptr(unsafe.Pointer(&val)) + uintptr(i))) = arr[i]
-    }
-    return val
-}
-
 /*
 	Processes the given input and outputs the requested information. Returns 0 at the end.
 	Input is given in the format command arg1 arg2 arg3 arg4 ...
@@ -221,6 +169,22 @@ func process_input(input string) int{
 		fmt.Println(dirname)
 	}
 
+	// key generation command
+	if strings.Compare("generate", input) == 0 {
+		// Generate a private key from the RSA library
+		priKey, err := rsa.GenerateKey(rand.Reader, 2048)
+		fatal_err(err)
+
+		key = priKey // store the private key in the global instance to use
+
+		// Use the private key struct to generate a public key
+		pubKey := priKey.PublicKey
+
+		// print so the user can use it
+		fmt.Println("Public Key: %s\n", pubKey)
+		fmt.Println("Private Key: %s\n", priKey)
+	}
+
 	// Now we get rid of the single inputs, lets deal with multiple arguments (still simple commands)
 	// To begin lets break up the string first into [command, arg1, arg2, arg3, ...]
 	var new_input = strings.Split(input, " ")
@@ -244,6 +208,7 @@ func process_input(input string) int{
 		println("ping arg1 - checks if a ping can be made from the machine to the requested server")
 		println("\n")
 		println("Security Commands")
+		println("generate - generate a private key and a public key for encryption/decryption")
 		println("code arg1 - encrypts the password argument given")
 		println("crack arg1 - decrypts the encryption key given")
 		println("\n")
@@ -339,42 +304,24 @@ func process_input(input string) int{
 
 	// encrypt command
 	if strings.Compare("code", new_input[0]) == 0 {
+		// using the global instance of the private key encrypt the string
+		encryptedBytes, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, &key.PublicKey, []byte(new_input[1]), nil)
+		fatal_err(err)
+
+		bytes = encryptedBytes // store the encrypted bytes into bytes global instance
 		
-		// make the string password into a byte array
-		bytes := []byte(new_input[1])
-		numRep := ByteArrayToInt(bytes)
-		
-		// Create a prime p, q and find n
-		primeList := returnPrimeNumbers(2, 1000000)
-		randomIndex := rand.Intn(len(primeList))
-		randomIndex1 := rand.Intn(len(primeList))
-		p := primeList[randomIndex]
-		q := primeList[randomIndex1]
-		n := p*q
-
-		p_1 := p-1
-		q_1 := q-1
-		phi := LCM(p_1, q_1)
-
-		e := 2
-		for e < phi {
-			if(GCD(e, phi) == 1) {
-				break
-			} else {
-				e++
-			}
-		}
-
-		d := math.Mod(math.Pow(float64(e), -1), float64(p_1*q_1))
-		println(d)
-
-		cipher := math.Mod(math.Pow(float64(numRep), float64(e)), float64(n))
-		println(cipher)
+		// print the encrypted bytes for the user
+		fmt.Println("encrypted bytes: ", encryptedBytes)	
 	} 
 
 	// decrypt command
 	if strings.Compare("crack", new_input[0]) == 0 {
-		
+		// using the global instance of the private key decrypt the encryptedbytes
+		decryptedBytes, err := key.Decrypt(nil, bytes, &rsa.OAEPOptions{Hash: crypto.SHA256})
+		fatal_err(err)
+
+		// print out the decrypted message
+		fmt.Println("decrypted message: ", string(decryptedBytes))
 	}
 
 	return 0 // return 0 upon successful or even failure, fatal_err function will return failure for you
