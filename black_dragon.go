@@ -1,11 +1,6 @@
 package main
 
 /*
-	Things to Work On:
-		1. How to make EXE out of this
- */
-
-/*
 	The main libraries used in Black Dragon. Might change due to a possible dependency error in the future.
 	All of these libraries as of 1/10/2022 are not permanent.
 */
